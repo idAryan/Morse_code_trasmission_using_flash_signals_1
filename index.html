@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Morse Code Detector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .circle-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            border: 2px solid cyan;
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+        }
+        #videoElement {
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="bg-white shadow-lg rounded-lg p-6 w-full max-w-xl relative">
+        <h1 class="text-2xl font-bold mb-4 text-center">Morse Code Detector</h1>
+        
+        <div class="relative mb-4">
+            <video id="videoElement" 
+                   class="w-full bg-black rounded" 
+                   autoplay></video>
+            <div class="circle-overlay"></div>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-gray-700 mb-2">Brightness Threshold</label>
+            <input type="range" id="brightnessThreshold" 
+                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                   min="0" max="255" value="240">
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-gray-700 mb-2">Area Threshold</label>
+            <input type="range" id="areaThreshold" 
+                   class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                   min="0" max="1000" value="300">
+        </div>
+
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold mb-2">Current Status</h2>
+            <div id="statusDisplay" 
+                 class="p-2 rounded bg-gray-100 text-center font-mono">
+                No Flash Detected
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <h2 class="text-lg font-bold mb-2">Decoded Text</h2>
+            <textarea id="decodedText" 
+                      class="w-full p-2 border rounded bg-gray-50 resize-none text-6xl" 
+                      rows="4" readonly></textarea>
+        </div>
+
+        <div class="flex space-x-2">
+            <button id="startBtn" 
+                    class="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                Start Detection
+            </button>
+            <button id="stopBtn" 
+                    class="flex-1 bg-red-500 text-white py-2 rounded hover:bg-red-600">
+                Stop Detection
+            </button>
+        </div>
+    </div>
+
+    <script>
+    class MorseCodeDetector {
+        constructor() {
+            this.video = document.getElementById('videoElement');
+            this.setupEventListeners();
+            this.resetState();
+        }
+
+        resetState() {
+            this.currentMorse = '';
+            this.decodedText = '';
+            this.lastLightState = false;
+            this.lightStartTime = 0;
+            this.lastLightEndTime = 0;
+        }
+
+        setupEventListeners() {
+            document.getElementById('startBtn').addEventListener('click', () => this.startDetection());
+            document.getElementById('stopBtn').addEventListener('click', () => this.stopDetection());
+        }
+
+        async startDetection() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                this.video.srcObject = stream;
+                this.video.play();
+                this.setupCanvas();
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Failed to access camera. Please check permissions.');
+            }
+        }
+
+        setupCanvas() {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+
+            this.video.onloadedmetadata = () => {
+                canvas.width = this.video.videoWidth;
+                canvas.height = this.video.videoHeight;
+                this.processFrame(canvas, context);
+            };
+        }
+
+        stopDetection() {
+            const stream = this.video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                this.video.srcObject = null;
+                this.resetState();
+                document.getElementById('statusDisplay').textContent = 'Detection Stopped';
+                document.getElementById('decodedText').value = this.decodedText;
+            }
+        }
+
+        processFrame(canvas, context) {
+            if (!this.video.srcObject) return;
+
+            const brightnessThreshold = document.getElementById('brightnessThreshold').value;
+            const areaThreshold = document.getElementById('areaThreshold').value;
+
+            context.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const lightDetected = this.detectLightInCircle(imageData, brightnessThreshold, areaThreshold);
+
+            const currentTime = Date.now() / 1000;
+            this.updateMorseCode(lightDetected, currentTime);
+
+            document.getElementById('statusDisplay').textContent = 
+                lightDetected ? 'Flash Detected!' : 'No Flash Detected';
+
+            requestAnimationFrame(() => this.processFrame(canvas, context));
+        }
+
+        detectLightInCircle(imageData, brightnessThreshold, areaThreshold) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const centerX = Math.floor(width / 2);
+            const centerY = Math.floor(height / 2);
+            const radius = 50; // Adjusted to match the visual circle
+
+            let brightPixels = 0;
+            for (let y = centerY - radius; y < centerY + radius; y++) {
+                for (let x = centerX - radius; x < centerX + radius; x++) {
+                    // Check if point is inside circle
+                    const distanceFromCenter = Math.sqrt(
+                        Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2)
+                    );
+                    
+                    if (distanceFromCenter <= radius) {
+                        const index = (y * width + x) * 4;
+                        const gray = (imageData.data[index] + imageData.data[index+1] + imageData.data[index+2]) / 3;
+                        if (gray > brightnessThreshold) {
+                            brightPixels++;
+                        }
+                    }
+                }
+            }
+
+            return brightPixels > areaThreshold;
+        }
+
+        updateMorseCode(lightDetected, currentTime) {
+            const DIT_MAX_DURATION = 0.3;
+            const LETTER_GAP = 0.7;
+            const WORD_GAP = 1.4;
+
+            if (lightDetected !== this.lastLightState) {
+                if (lightDetected) {
+                    this.lightStartTime = currentTime;
+                } else {
+                    const duration = currentTime - this.lightStartTime;
+                    this.currentMorse += duration < DIT_MAX_DURATION ? "." : "-";
+                    this.lastLightEndTime = currentTime;
+                }
+                this.lastLightState = lightDetected;
+            }
+
+            const morseCodeDict = {
+                '.-':'A', '-...':'B', '-.-.':'C', '-..':'D', '.':'E', 
+                '..-.':'F', '--.':'G', '....':'H', '..':'I', '.---':'J', 
+                '-.-':'K', '.-..':'L', '--':'M', '-.':'N', '---':'O', 
+                '.--.':'P', '--.-':'Q', '.-.':'R', '...':'S', '-':'T', 
+                '..-':'U', '...-':'V', '.--':'W', '-..-':'X', '-.--':'Y', 
+                '--..':'Z', '-----':'0', '.----':'1', '..---':'2', 
+                '...--':'3', '....-':'4', '.....':'5', '-....':'6', 
+                '--...':'7', '---..':'8', '----.':'9'
+            };
+
+            if (!lightDetected && this.currentMorse && 
+                (currentTime - this.lastLightEndTime) > LETTER_GAP) {
+                const decodedLetter = morseCodeDict[this.currentMorse] || '?';
+                this.decodedText += decodedLetter;
+                document.getElementById('decodedText').value = this.decodedText;
+                this.currentMorse = "";
+                this.lastLightEndTime = currentTime;
+            }
+
+            if (!lightDetected && this.decodedText && 
+                (currentTime - this.lastLightEndTime) > WORD_GAP) {
+                if (!this.decodedText.endsWith(' ')) {
+                    this.decodedText += ' ';
+                    document.getElementById('decodedText').value = this.decodedText;
+                }
+                this.lastLightEndTime = currentTime;
+            }
+        }
+    }
+
+    new MorseCodeDetector();
+    </script>
+</body>
+</html>
