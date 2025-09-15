@@ -17,5 +17,24 @@ Lets understand how open cv works here
    ii) Gray Scale Conversion : So adjust color variance. The image become 1 channel and only have range of (0-255)  
    iii) apply Circular mask to detect in circular region only rest become 0(black)    
    iv) apply Gaussian Blur to smoothen the image : As What is Blur ? It is the weighted average of pixels around them. Close neighbor have more weight then others.  
-   v) Apply detection threshold : Pixels above 240 brightness become White rest become black, so overall image inside mask now in form of 0 and 1 only where in single channel image, pixel above the threshold(240) become white(1) and rest become black(0)   
+   v) Apply brightness threshold : Pixels above 240 brightness become White rest become black, so overall image inside mask now in form of 0 and 1 only where in single channel image, pixel above the threshold(240) become white(1) and rest become black(0)   
    vi) `cv2.findContours` will find the bright spots, it will detect the white boundaries of white pixels (1). It will return the list of countours each forming boundary around the detected bright spots.  
+5) There could be multiple contour detections, so it could provide multiple lists. So need to apply area thresholding also (previosly appled brightness threshold), so create a areathreshold function. If area is large enough in comparision to threshold treat it as a flash, otherwise not a flash. 
+   ```
+   for contour in countours:  
+      if cv2.contourArea(countour)>areathreshold:  
+         return True,contour  
+   return contour
+   ```
+  
+
+### Challenges & Possible solutions in approach 1  
+1) Brightness threshold could change according to environment : Since brightness is not constant, it varies place to place, if outside brightness is large enough and satisfies the threshold value, then it will assume it as bright enough as convert the pixels to white (1) in single channel image. Now since it is large enough then it will also satisfies the area threshold due to will `areathreshold` function will return `true`. Thus it will easily fail in outside environment.
+   #### Solution: 
+   Rather then using a constant brightness threshold use `adaptive brightness thresholding` as it will adjust the threshold value according to the environment. Thus will minimize the false white pixels so areathreshold  will not satisfy thus flashlight will not be detected.
+     
+2) Hardcoded areathreshold : The area of a flash varies with distance, if flash is far enough then area will be less so there would be less white pixels so areathresholding fails here.
+   #### Solution:
+   Test the expected flashlight area to various distances and add a expected flashlight distance option in it.
+   
+   
