@@ -26,7 +26,23 @@ Lets understand how open cv works here
          return True,contour  
    return contour
    ```
-  
+6) Declare Timing parameters  
+   `DIT_MAX_DUR`=0.3 (.,_ are considered as DIT (.))  
+   `LETTER_GAP`=0.7 (.--..., in english it is AB and there should be some letter gap duration, to differentiate that the new letter is begin from certain point)  
+   `WORD_GAP`=1.4 (To find where the new words starts .-.--...-... in english it is AA BB, so the space between AA and BB is represented by the given duration)  
+   The - is determined if Duration of Flash is more then `DIT_MAX_DUR` bit less than `LETTER_GAP`.  
+7) Declare function `decode_morse_code_to_english`, it will map ....  
+8) Write videocapture code, 0 means default camera, if you have another camera linked to PC/device then you could change it.
+   ```
+   cap=cv2.VideoCapture(0)
+   if not cap.isOpened():
+      print("Cannot access webcam")
+      return
+   ```
+9) Declare the empty variables for morse code `current_morse` and decoded text `decoded text`
+   Set the last flash status as `off` `last_light_state=False`
+   To measure the timings set two variables to track, `light_start_time=0` and `last_light_end_time=0`.
+   
 
 ### Challenges & Possible solutions in approach 1  
 1) Brightness threshold could change according to environment : Since brightness is not constant, it varies place to place, if outside brightness is large enough and satisfies the threshold value, then it will assume it as bright enough as convert the pixels to white (1) in single channel image. Now since it is large enough then it will also satisfies the area threshold due to will `areathreshold` function will return `true`. Thus it will easily fail in outside environment.
@@ -37,4 +53,6 @@ Lets understand how open cv works here
    #### Solution:
    Test the expected flashlight area to various distances and add a expected flashlight distance option in it.
    
-   
+
+## Dataset & References
+https://www.kaggle.com/datasets/itsaryanar/smartphone-flashlight-image-mask-dataset-sfimd
